@@ -2,8 +2,10 @@
 #include <string.h>
 #include <stdlib.h>
 
-static char special_char = '_';
+static char special_char = '.';
 static int highlight_words = 0;
+static int chunk_size = 0;
+static int sufficient_print = 0;
 
 void replace(const char *filename, int start, int end, const char *output_file)
 {
@@ -15,6 +17,7 @@ void replace(const char *filename, int start, int end, const char *output_file)
   fseek(file, 0, SEEK_SET);
 
   size_t size;
+  if(end == 0) end = file_size;
   if((start + end) > file_size && !(file_size == 0))
   {
     while(end >= file_size)
@@ -66,6 +69,9 @@ void replace(const char *filename, int start, int end, const char *output_file)
   {
     pad_val = "%010X";
   }
+  if(chunk_size == 0) chunk_size = file_size;
+
+  int cur = 0;
   for(int i = 0; i < file_size; i++)
   {
     if(i == file_size - 1)
@@ -79,10 +85,13 @@ void replace(const char *filename, int start, int end, const char *output_file)
 
       for(int x = 0; x < 16; x++)
       {
-        if(ascii_val[x] == special_char) printf("\033[1;91m%c\033[0;37m", ascii_val[x]);
-        else printf("\033[1;97m%c", ascii_val[x]); 
+        if(ascii_val[x] == '\0') printf("\033[1;91m.\033[0;37m");
+        else {
+          if(ascii_val[x] == special_char) printf("\033[1;91m%c\033[0;37m", ascii_val[x]);
+          else printf("\033[1;97m%c", ascii_val[x]); 
+        }
       }
-      if(mem_addr / 1024 / 1024 > 1) printf(" | [%f]", (float)mem_addr / 1024 / 1024);
+      if(mem_addr / 1024 / 1024 >= 1) printf(" | [%fMB]\n", (float)mem_addr / 1024 / 1024);
       else printf("\n");
       break;
     }
@@ -96,84 +105,121 @@ void replace(const char *filename, int start, int end, const char *output_file)
     else total_found++;
 
     if((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z')) {
-      ascii_val[ind] = (char)current;
-      ind++;
-    } else {
-      ascii_val[ind] = special_char;
-      ind++;
-    }
+        ascii_val[ind] = (char)current;
+        ind++;
+      } else {
+        ascii_val[ind] = special_char;
+        ind++;
+      }
 
-    if(i == size)
+    if(sufficient_print == 1)
     {
-      printf("\n\n\t\t----CUT----\n\n");
-    }
-    if(mem_addr % 16 == 0)
-    {
-      if(mem_addr >= 0x1000 && mem_addr < 0x8000)
+      if(mem_addr % 16 == 0)
       {
-        sprintf(mem_addr_padding, pad_val, mem_addr);
-        printf("\033[1;33m%s\033[0;37m | ", mem_addr_padding);
-        memset(mem_addr_padding, 0, strlen(mem_addr_padding));
-      }
-      else if(mem_addr >= 0x8000 && mem_addr < 0x30000)
-      {
-        sprintf(mem_addr_padding, pad_val, mem_addr);
-        printf("\033[1;31m%s\033[0;37m | ", mem_addr_padding);
-        memset(mem_addr_padding, 0, strlen(mem_addr_padding));
-      }
-      else if(mem_addr >= 0x30000)
-      {
-        sprintf(mem_addr_padding, pad_val, mem_addr);
-        printf("\033[0;91m%s\033[0;37m | ", mem_addr_padding);
-        memset(mem_addr_padding, 0, strlen(mem_addr_padding));
-      }
-      else {
-        sprintf(mem_addr_padding, pad_val, mem_addr);
-        printf("%s | ", mem_addr_padding);
-        memset(mem_addr_padding, 0, strlen(mem_addr_padding));
-      }
-      if(total_found > 0 && (INFO[i + 1] == last_val || INFO[i - 1] == last_val))
-        printf("\033[1;32m%02X\033[0;37m ", current);
-      else
-      {
-        if((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z')) printf("\033[1;94m%02X\033[0;37m ", current);
-        else printf("\033[1;93m%02X\033[0;37m ", current);
-      }
-    } else if(mem_addr % 16 == 15)
-    {
-      if(total_found > 0 && (INFO[i + 1] == last_val || INFO[i - 1] == last_val))
-        printf("\033[1;32m%02X\033[0;37m | ", current);
-      else
-      {
-        if((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z')) printf("\033[1;94m%02X\033[0;37m | ", current);
-        else printf("\033[1;93m%02X\033[0;37m | ", current);
-      }
-      for(int x = 0; x < 16; x++)
-      {
-        if(ascii_val[x] == special_char) printf("\033[1;91m%c\033[0;37m", ascii_val[x]);
-        else {
-          if(highlight_words == 1) printf("\033[46m\033[1;97m%c\033[0m", ascii_val[x]);
-          else printf("\033[1;97m%c\033[0;37m", ascii_val[x]); 
+        if(cur == 0)
+        {
+          // putchar('\n');
+          // for(int d = 0; d < 80; d++) putchar('-');
+          // putchar('\n');
+          sprintf(mem_addr_padding, pad_val, mem_addr);
+          printf("\n\033[1;33m%s\033[0;37m | ", mem_addr_padding);
+          memset(mem_addr_padding, 0, strlen(mem_addr_padding));
         }
       }
-      if(mem_addr / 1024 / 1024 >= 1) printf("\033[0;37m | [%2fMB]\n", (float)mem_addr / 1024 / 1024);
-      else printf("\n");
-      ind = 0;
-    } else
-    {
-      if(total_found > 0 && (INFO[i + 1] == last_val || INFO[i - 1] == last_val))
-        printf("\033[1;32m%02X\033[0;37m ", current);
-      else
+
+      if(ind >= 16)
       {
-        if((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z')) printf("\033[1;94m%02X\033[0;37m ", current);
-        else printf("\033[1;93m%02X\033[0;37m ", current);
+        memset(ascii_val, 0, ind);
+        ind = 0;
+      }
+
+      if(cur >= 512)
+      {
+        cur = 0;
+      } else {
+        if(cur < 16) printf("%02X ", current);
+        else {
+          if(cur >= 511 && mem_addr % 16 == 0)
+          {
+            putchar('\n');
+            for(int d = 0; d < 80; d++) putchar('-');
+            putchar('\n');
+            printf("\n%010X | ", mem_addr+1);
+          }
+        }
+        cur++;
+      }
+    } else {
+      if(i == size) printf("\n\n\t\t----CUT----\n\n");
+      if(mem_addr % chunk_size == 0)printf("\n\t\t\t\t%d CHUNK\n\n", chunk_size);
+      if(mem_addr % 16 == 0)
+      {
+        if(mem_addr >= 0x1000 && mem_addr < 0x8000)
+        {
+          sprintf(mem_addr_padding, pad_val, mem_addr);
+          printf("\033[1;33m%s\033[0;37m | ", mem_addr_padding);
+          memset(mem_addr_padding, 0, strlen(mem_addr_padding));
+        }
+        else if(mem_addr >= 0x8000 && mem_addr < 0x30000)
+        {
+          sprintf(mem_addr_padding, pad_val, mem_addr);
+          printf("\033[1;31m%s\033[0;37m | ", mem_addr_padding);
+          memset(mem_addr_padding, 0, strlen(mem_addr_padding));
+        }
+        else if(mem_addr >= 0x30000)
+        {
+          sprintf(mem_addr_padding, pad_val, mem_addr);
+          printf("\033[0;91m%s\033[0;37m | ", mem_addr_padding);
+          memset(mem_addr_padding, 0, strlen(mem_addr_padding));
+        }
+        else {
+          sprintf(mem_addr_padding, pad_val, mem_addr);
+          printf("%s | ", mem_addr_padding);
+          memset(mem_addr_padding, 0, strlen(mem_addr_padding));
+        }
+        if(total_found > 0 && (INFO[i + 1] == last_val || INFO[i - 1] == last_val))
+          printf("\033[1;32m%02X\033[0;37m ", current);
+        else
+        {
+          if((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z')) printf("\033[1;94m%02X\033[0;37m ", current);
+          else printf("\033[1;93m%02X\033[0;37m ", current);
+        }
+      } else if(mem_addr % 16 == 15)
+      {
+        if(total_found > 0 && (INFO[i + 1] == last_val || INFO[i - 1] == last_val))
+          printf("\033[1;32m%02X\033[0;37m | ", current);
+        else
+        {
+          if((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z')) printf("\033[1;94m%02X\033[0;37m | ", current);
+          else printf("\033[1;93m%02X\033[0;37m | ", current);
+        }
+        for(int x = 0; x < 16; x++)
+        {
+          if(ascii_val[x] == special_char) printf("\033[1;91m%c\033[0;37m", ascii_val[x]);
+          else {
+            if(highlight_words == 1) printf("\033[46m\033[1;97m%c\033[0m", ascii_val[x]);
+            else printf("\033[1;97m%c\033[0;37m", ascii_val[x]); 
+          }
+        }
+        memset(ascii_val, 0, strlen(ascii_val));
+        if(mem_addr / 1024 / 1024 >= 1) printf("\033[0;37m | [%.3fMB]\n", (float)mem_addr / 1024 / 1024);
+        else printf("\n");
+        ind = 0;
+      } else
+      {
+        if(total_found > 0 && (INFO[i + 1] == last_val || INFO[i - 1] == last_val))
+          printf("\033[1;32m%02X\033[0;37m ", current);
+        else
+        {
+          if((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z')) printf("\033[1;94m%02X\033[0;37m ", current);
+          else printf("\033[1;93m%02X\033[0;37m ", current);
+        }
       }
     }
 
     mem_addr++;
   }
 
-  // BUFFER[index - 1] = '\0';
   fclose(file);
   fclose(rep);
 }
@@ -192,6 +238,10 @@ int main(int arg_c, char **argv)
     exit(EXIT_FAILURE);
   }
 
+  int start = 0;
+  int end = 0;
+  char* of = "out.txt";
+
   for(int i = 0; i < arg_c; i++)
   {
     if(strcmp(argv[i], "--special") == 0)
@@ -199,9 +249,27 @@ int main(int arg_c, char **argv)
       if(see_next(i, arg_c) == 1) special_char = (char)argv[i + 1][0];
     }
     if(strcmp(argv[i], "--HW") == 0) highlight_words = 1;
+    if(strcmp(argv[i], "--S") == 0)
+    {
+	    if(see_next(i, arg_c) == 1) start = atoi(argv[i + 1]);
+    }
+    if(strcmp(argv[i], "--E") == 0)
+    {
+	    if(see_next(i, arg_c) == 1) end = atoi(argv[i + 1]);
+    }
+    if(strcmp(argv[i], "--OF") == 0)
+    {
+	    if(see_next(i, arg_c) == 1) of = argv[i + 1];
+    }
+    if(strcmp(argv[i], "--CS") == 0)
+    {
+      if(see_next(i, arg_c) == 1) chunk_size = atoi(argv[i + 1]);
+    }
+    if(strcmp(argv[i], "--SP") == 0)
+    {
+      sufficient_print = 1;
+    }
   }
 
-  replace(argv[1], atoi(argv[2]), atoi(argv[3]), argv[4]);
-
-  
+  replace(argv[1], start, end, of);
 }
